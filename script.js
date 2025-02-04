@@ -17,8 +17,8 @@ let runBot = true;
 
 // Initialize the game
 window.onload = () => {
-    // Add click event to all boxes
-    allBox.forEach(box => {
+    allBox.forEach((box, index) => {
+        box.setAttribute("data-index", index);
         box.addEventListener("click", () => clickedBox(box));
     });
 };
@@ -39,78 +39,112 @@ selectBtnO.onclick = () => {
 // Handle user click
 function clickedBox(element) {
     if (players.classList.contains("player")) {
-        playerSign = "O"; // Set sign to 'O' if player selected 'O'
-        element.innerHTML = `<i class="${playerOIcon}"></i>`; // Add 'O' icon
-        players.classList.remove("active"); // Switch active player
+        playerSign = "O";
+        element.innerHTML = `<i class="${playerOIcon}"></i>`;
+        players.classList.remove("active");
     } else {
-        element.innerHTML = `<i class="${playerXIcon}"></i>`; // Add 'X' icon
+        element.innerHTML = `<i class="${playerXIcon}"></i>`;
         players.classList.add("active");
     }
-    element.setAttribute("id", playerSign); // Set ID to player sign
-    element.style.pointerEvents = "none"; 
+    element.setAttribute("id", playerSign);
+    element.style.pointerEvents = "none";
     playBoard.style.pointerEvents = "none";
-    selectWinner(); // Check for a winner
+    selectWinner();
 
-    // Random delay for bot's move
-    const randomTimeDelay = Math.floor(Math.random() * 1000) + 200;
-    setTimeout(() => {
-        bot();
-    }, randomTimeDelay);
-}
-
-// Bot's move
-function bot() {
     if (runBot) {
-        const availableBoxes = [...allBox].filter(box => !box.childElementCount); // Get available boxes
-        const randomBox = availableBoxes[Math.floor(Math.random() * availableBoxes.length)]; // Pick a random box
-
-        if (randomBox) {
-            if (players.classList.contains("player")) {
-                playerSign = "X"; // Bot plays 'X' if player chose 'O'
-                randomBox.innerHTML = `<i class="${playerXIcon}"></i>`;
-                players.classList.add("active");
-            } else {
-                playerSign = "O"; // Bot plays 'O' if player chose 'X'
-                randomBox.innerHTML = `<i class="${playerOIcon}"></i>`;
-                players.classList.remove("active");
-            }
-            randomBox.setAttribute("id", playerSign);
-            randomBox.style.pointerEvents = "none";
-            selectWinner(); // Check for a winner
-            playBoard.style.pointerEvents = "auto";
-            playerSign = "X"; // Reset to player's sign
-        }
+        setTimeout(() => {
+            bot();
+        }, 500);
     }
 }
 
-// Get the ID of a box
-function getIdVal(classname) {
-    return document.querySelector(".box" + classname).id;
+// Bot's move using Minimax Algorithm
+function bot() {
+    const availableBoxes = [...allBox].filter(box => !box.id);
+    if (availableBoxes.length === 0) return;
+
+    let bestMove;
+    let bestScore = -Infinity;
+    const botSign = players.classList.contains("player") ? "X" : "O";
+    const playerSignTemp = botSign === "X" ? "O" : "X";
+
+    availableBoxes.forEach(box => {
+        box.id = botSign;
+        const score = minimax(false, botSign, playerSignTemp);
+        box.id = "";
+        if (score > bestScore) {
+            bestScore = score;
+            bestMove = box;
+        }
+    });
+
+    if (bestMove) {
+        bestMove.innerHTML = botSign === "X" ? `<i class="${playerXIcon}"></i>` : `<i class="${playerOIcon}"></i>`;
+        bestMove.setAttribute("id", botSign);
+        bestMove.style.pointerEvents = "none";
+        selectWinner();
+        playBoard.style.pointerEvents = "auto";
+        players.classList.toggle("active");
+    }
 }
 
-// Check if a winning combination is met
-function checkIdSign(val1, val2, val3, sign) {
-    return getIdVal(val1) === sign && getIdVal(val2) === sign && getIdVal(val3) === sign;
+function minimax(isMaximizing, botSign, playerSign) {
+    const winner = checkWinner();
+    if (winner === botSign) return 1;
+    if (winner === playerSign) return -1;
+    if ([...allBox].every(box => box.id)) return 0;
+
+    if (isMaximizing) {
+        let bestScore = -Infinity;
+        [...allBox].forEach(box => {
+            if (!box.id) {
+                box.id = botSign;
+                const score = minimax(false, botSign, playerSign);
+                box.id = "";
+                bestScore = Math.max(score, bestScore);
+            }
+        });
+        return bestScore;
+    } else {
+        let bestScore = Infinity;
+        [...allBox].forEach(box => {
+            if (!box.id) {
+                box.id = playerSign;
+                const score = minimax(true, botSign, playerSign);
+                box.id = "";
+                bestScore = Math.min(score, bestScore);
+            }
+        });
+        return bestScore;
+    }
 }
 
-// Determine the winner
-function selectWinner() {
+function checkWinner() {
     const winningCombinations = [
-        [1, 2, 3], [4, 5, 6], [7, 8, 9],
-        [1, 4, 7], [2, 5, 8], [3, 6, 9],
-        [1, 5, 9], [3, 5, 7]
+        [0, 1, 2], [3, 4, 5], [6, 7, 8],
+        [0, 3, 6], [1, 4, 7], [2, 5, 8],
+        [0, 4, 8], [2, 4, 6]
     ];
 
-    const isWinner = winningCombinations.some(combination => checkIdSign(...combination, playerSign));
+    for (let combo of winningCombinations) {
+        const [a, b, c] = combo;
+        if (allBox[a].id && allBox[a].id === allBox[b].id && allBox[a].id === allBox[c].id) {
+            return allBox[a].id;
+        }
+    }
+    return null;
+}
 
-    if (isWinner) {
-        runBot = false; // Stop the bot
+function selectWinner() {
+    const winner = checkWinner();
+    if (winner) {
+        runBot = false;
         setTimeout(() => {
             resultBox.classList.add("show");
             playBoard.classList.remove("show");
-            wonText.innerHTML = `Player <p>${playerSign}</p> won the game!`;
+            wonText.innerHTML = `Player <p>${winner}</p> won the game!`;
         }, 700);
-    } else if ([...allBox].every(box => box.id)) { // Check for a draw
+    } else if ([...allBox].every(box => box.id)) {
         runBot = false;
         setTimeout(() => {
             resultBox.classList.add("show");
@@ -122,5 +156,5 @@ function selectWinner() {
 
 // Replay button click event
 replayBtn.onclick = () => {
-    window.location.reload(); // Reload the page
+    window.location.reload();
 };
